@@ -10,6 +10,8 @@ Claude was used throughout this project to assist in, and expedite development. 
 
 ## Install
 
+Download a prebuilt binary from [Releases](../../releases), or build from source:
+
 ```bash
 # Build locally
 make build
@@ -20,7 +22,15 @@ make install
 cveye
 ```
 
-Requires Go 1.21+.
+Requires Go 1.21+ to build from source.
+
+### macOS Gatekeeper
+
+Downloaded binaries will be blocked by macOS quarantine. Remove the quarantine attribute before running:
+
+```bash
+xattr -d com.apple.quarantine cveye-darwin-*
+```
 
 ## Usage
 
