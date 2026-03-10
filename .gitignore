@@ -1,0 +1,8 @@
+.claude/
+bin/
+cveye
+cveye.exe
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,85 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections below so we can reproduce and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+      placeholder: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run `cveye product ...`
+        2. Press `e` to toggle EPSS sort
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: cveye-version
+    attributes:
+      label: CVEye Version
+      description: Output of `cveye --version` or the git commit/tag.
+      placeholder: v1.0.0 or commit abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go Version
+      description: Output of `go version`.
+      placeholder: go1.21.0 darwin/arm64
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux (x86_64)
+        - Linux (ARM64)
+        - Windows
+        - Android (Termux)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      description: e.g. macOS 15.3, Ubuntu 24.04, Windows 11
+      placeholder: macOS 15.3
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal Emulator
+      description: e.g. iTerm2, Alacritty, Windows Terminal, Termux
+      placeholder: iTerm2 3.5
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Output / Screenshots
+      description: Paste any error messages or attach screenshots.
+      render: text
