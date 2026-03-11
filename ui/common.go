@@ -75,6 +75,7 @@ func RenderFooter(view ViewID, searchDetail bool, width int) string {
 		keys = []hint{
 			{"tab", "switch view"},
 			{"esc", "toggle focus"},
+			{"/", "filter"},
 			{"s", "save json"},
 			{"n/p", "next/prev page"},
 			{"ctrl+c", "quit"},
