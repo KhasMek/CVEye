@@ -53,8 +53,37 @@ jobs:
           name: cveye-${{ matrix.suffix }}
           path: cveye-${{ matrix.suffix }}${{ matrix.ext }}
 
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: Build for Android ARM64
+        env:
+          GOOS: android
+          GOARCH: arm64
+          CGO_ENABLED: "1"
+          CC: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang
+        run: go build -ldflags="-s -w" -o cveye-android-arm64 .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cveye-android-arm64
+          path: cveye-android-arm64
+
   release:
-    needs: build
+    needs: [build, build-android]
     runs-on: ubuntu-latest
 
     steps:
