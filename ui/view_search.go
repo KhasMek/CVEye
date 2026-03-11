@@ -34,19 +34,6 @@ func searchCVEsPageCmd(params api.SearchCVEsParams) tea.Cmd {
 	}
 }
 
-// SortMode controls how results are ordered.
-type SortMode int
-
-const (
-	SortDefault SortMode = iota
-	SortEPSS
-	SortCVSS
-	SortDate
-	SortCVEID
-)
-
-var sortModeNames = []string{"default", "EPSS", "CVSS", "date", "CVE ID"}
-
 // SearchModel is the model for the Product Search view.
 type SearchModel struct {
 	input      textinput.Model

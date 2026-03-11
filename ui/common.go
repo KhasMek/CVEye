@@ -268,6 +268,19 @@ func (s SaveFlow) View(width int) string {
 		Render(content)
 }
 
+// SortMode controls how results are ordered.
+type SortMode int
+
+const (
+	SortDefault SortMode = iota
+	SortEPSS
+	SortCVSS
+	SortDate
+	SortCVEID
+)
+
+var sortModeNames = []string{"default", "EPSS", "CVSS", "date", "CVE ID"}
+
 // SortFlow manages the two-phase sort UI: choose mode, then choose direction.
 type SortPhase int
 
