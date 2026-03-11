@@ -55,6 +55,8 @@ type CPEModel struct {
 	filterInput  textinput.Model
 	filterActive bool
 	filterText   string
+
+	SaveFlow SaveFlow
 }
 
 const cpePageSize = 100
@@ -76,6 +78,7 @@ func NewCPEModel() CPEModel {
 		spinner:     NewSpinner(),
 		inputFocus:  true,
 		filterInput: fi,
+		SaveFlow:    NewSaveFlow(),
 	}
 }
 
@@ -109,6 +112,21 @@ func (m CPEModel) Update(msg tea.Msg) (CPEModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Save flow keys
+		if m.SaveFlow.Active() {
+			cmd, result := m.SaveFlow.Update(msg)
+			if result == SaveConfirm {
+				var data any
+				if m.SaveFlow.SaveAll {
+					data = m.allResults
+				} else {
+					data = m.filtered
+				}
+				return m, SaveJSONCmd(m.SaveFlow.Input.Value(), data)
+			}
+			return m, cmd
+		}
+
 		// Inline filter keys
 		if m.filterActive {
 			switch msg.String() {
@@ -194,8 +212,12 @@ func (m CPEModel) Update(msg tea.Msg) (CPEModel, tea.Cmd) {
 				if name == "" {
 					name = "cpes"
 				}
-				filename := name + "-cpes.json"
-				return m, SaveJSONCmd(filename, m.filtered)
+				if m.filterText != "" {
+					m.SaveFlow.StartChoosing(name+"-cpes.json", name+"-cpes-filtered.json")
+					return m, nil
+				}
+				m.SaveFlow.SaveAll = true
+				return m, m.SaveFlow.StartNaming(name + "-cpes.json")
 			}
 		case "q":
 			if !m.inputFocus {
@@ -381,3 +403,4 @@ func (m *CPEModel) SetSize(w, h int) {
 func (m CPEModel) ResultCount() int {
 	return len(m.filtered)
 }
+

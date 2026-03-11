@@ -9,6 +9,7 @@ import (
 	"cveye/api"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -158,6 +159,113 @@ type ClearStatusMsg struct{}
 // RenderStatus renders a brief status message.
 func RenderStatus(msg string) string {
 	return lipgloss.NewStyle().Foreground(ColorLow).Render(msg)
+}
+
+// SaveFlow manages the two-phase save UI: optional a/f choice, then filename input.
+type SavePhase int
+
+const (
+	SaveIdle SavePhase = iota
+	SaveChoosing
+	SaveNaming
+)
+
+type SaveResult int
+
+const (
+	SaveNone SaveResult = iota
+	SaveCancel
+	SaveConfirm
+)
+
+type SaveFlow struct {
+	Phase       SavePhase
+	Input       textinput.Model
+	SaveAll     bool
+	allName     string // filename for "all" choice
+	filteredName string // filename for "filtered" choice
+}
+
+func NewSaveFlow() SaveFlow {
+	ti := textinput.New()
+	ti.CharLimit = 200
+	ti.Width = 50
+	return SaveFlow{Input: ti}
+}
+
+func (s SaveFlow) Active() bool {
+	return s.Phase != SaveIdle
+}
+
+// StartChoosing enters the a/f selection phase with pre-set filenames.
+func (s *SaveFlow) StartChoosing(allName, filteredName string) {
+	s.Phase = SaveChoosing
+	s.allName = allName
+	s.filteredName = filteredName
+}
+
+// StartNaming enters the filename input phase directly.
+func (s *SaveFlow) StartNaming(defaultName string) tea.Cmd {
+	s.Phase = SaveNaming
+	s.Input.SetValue(defaultName)
+	s.Input.Focus()
+	s.Input.CursorEnd()
+	return textinput.Blink
+}
+
+// Update handles keys during the save flow and returns a result.
+func (s *SaveFlow) Update(msg tea.KeyMsg) (tea.Cmd, SaveResult) {
+	switch s.Phase {
+	case SaveChoosing:
+		switch msg.String() {
+		case "a":
+			s.SaveAll = true
+			return s.StartNaming(s.allName), SaveNone
+		case "f":
+			s.SaveAll = false
+			return s.StartNaming(s.filteredName), SaveNone
+		case "esc":
+			s.Phase = SaveIdle
+			return nil, SaveCancel
+		}
+	case SaveNaming:
+		switch msg.String() {
+		case "enter":
+			s.Phase = SaveIdle
+			s.Input.Blur()
+			return nil, SaveConfirm
+		case "esc":
+			s.Phase = SaveIdle
+			s.Input.Blur()
+			return nil, SaveCancel
+		default:
+			var cmd tea.Cmd
+			s.Input, cmd = s.Input.Update(msg)
+			return cmd, SaveNone
+		}
+	}
+	return nil, SaveNone
+}
+
+// View renders the save prompt for the footer area.
+func (s SaveFlow) View(width int) string {
+	var content string
+	switch s.Phase {
+	case SaveChoosing:
+		content = FooterKeyStyle.Render("save") + FooterDescStyle.Render(": ") +
+			FooterKeyStyle.Render("a") + FooterDescStyle.Render(": all results") + "   " +
+			FooterKeyStyle.Render("f") + FooterDescStyle.Render(": filtered results") + "   " +
+			FooterKeyStyle.Render("esc") + FooterDescStyle.Render(": cancel")
+	case SaveNaming:
+		content = FooterKeyStyle.Render("save as: ") + s.Input.View() + "   " +
+			FooterKeyStyle.Render("enter") + FooterDescStyle.Render(": confirm") + "   " +
+			FooterKeyStyle.Render("esc") + FooterDescStyle.Render(": cancel")
+	}
+	return lipgloss.NewStyle().
+		Foreground(ColorDim).
+		Width(width).
+		Padding(0, 1).
+		Render(content)
 }
 
 // BestCVSS returns the highest-fidelity CVSS score, or -1 if none.

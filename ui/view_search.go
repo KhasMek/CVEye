@@ -81,6 +81,8 @@ type SearchModel struct {
 	filterInput  textinput.Model
 	filterActive bool
 	filterText   string
+
+	SaveFlow SaveFlow
 }
 
 // applyFilters rebuilds m.filtered from m.allResults based on current filter/sort state.
@@ -239,6 +241,7 @@ func NewSearchModel() SearchModel {
 		spinner:     NewSpinner(),
 		inputFocus:  true,
 		filterInput: fi,
+		SaveFlow:    NewSaveFlow(),
 	}
 }
 
@@ -302,6 +305,23 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Save flow keys
+		if m.SaveFlow.Active() {
+			cmd, result := m.SaveFlow.Update(msg)
+			if result == SaveConfirm {
+				var data any
+				if m.detail != nil {
+					data = m.detail
+				} else if m.SaveFlow.SaveAll {
+					data = m.allResults
+				} else {
+					data = m.filtered
+				}
+				return m, SaveJSONCmd(m.SaveFlow.Input.Value(), data)
+			}
+			return m, cmd
+		}
+
 		// Sort menu keys
 		if m.sortMenuOpen {
 			switch msg.String() {
@@ -365,8 +385,7 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 				m.scrollY++
 				return m, nil
 			case "s":
-				filename := m.detail.CVEID + ".json"
-				return m, SaveJSONCmd(filename, m.detail)
+				return m, m.SaveFlow.StartNaming(m.detail.CVEID + ".json")
 			case "q":
 				return m, tea.Quit
 			}
@@ -448,8 +467,12 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 				if name == "" {
 					name = "cpe-search"
 				}
-				filename := name + "-cves.json"
-				return m, SaveJSONCmd(filename, m.filtered)
+				if m.filterText != "" || m.isKEV {
+					m.SaveFlow.StartChoosing(name+"-cves.json", name+"-cves-filtered.json")
+					return m, nil
+				}
+				m.SaveFlow.SaveAll = true
+				return m, m.SaveFlow.StartNaming(name + "-cves.json")
 			}
 		case "q":
 			if !m.inputFocus {

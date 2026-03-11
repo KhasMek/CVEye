@@ -38,6 +38,7 @@ type CVEModel struct {
 	scrollY    int
 	inputFocus bool
 	status     string
+	SaveFlow SaveFlow
 }
 
 func NewCVEModel() CVEModel {
@@ -51,6 +52,7 @@ func NewCVEModel() CVEModel {
 		input:      ti,
 		spinner:    NewSpinner(),
 		inputFocus: true,
+		SaveFlow:   NewSaveFlow(),
 	}
 }
 
@@ -66,6 +68,15 @@ func (m CVEModel) Update(msg tea.Msg) (CVEModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Save flow keys
+		if m.SaveFlow.Active() {
+			cmd, result := m.SaveFlow.Update(msg)
+			if result == SaveConfirm {
+				return m, SaveJSONCmd(m.SaveFlow.Input.Value(), m.result)
+			}
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "enter":
 			if m.inputFocus && m.input.Value() != "" {
@@ -95,8 +106,7 @@ func (m CVEModel) Update(msg tea.Msg) (CVEModel, tea.Cmd) {
 			}
 		case "s":
 			if !m.inputFocus && m.result != nil {
-				filename := m.result.CVEID + ".json"
-				return m, SaveJSONCmd(filename, m.result)
+				return m, m.SaveFlow.StartNaming(m.result.CVEID + ".json")
 			}
 		case "q":
 			if !m.inputFocus {
@@ -233,4 +243,5 @@ func (m CVEModel) ResultCount() int {
 	}
 	return 0
 }
+
 
