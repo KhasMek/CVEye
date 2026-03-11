@@ -268,6 +268,104 @@ func (s SaveFlow) View(width int) string {
 		Render(content)
 }
 
+// SortFlow manages the two-phase sort UI: choose mode, then choose direction.
+type SortPhase int
+
+const (
+	SortFlowIdle SortPhase = iota
+	SortFlowChooseMode
+	SortFlowChooseDir
+)
+
+type SortResult int
+
+const (
+	SortResultNone SortResult = iota
+	SortResultCancel
+	SortResultConfirm
+)
+
+type SortFlow struct {
+	Phase   SortPhase
+	Mode    SortMode
+	Asc     bool
+}
+
+func (s SortFlow) Active() bool {
+	return s.Phase != SortFlowIdle
+}
+
+func (s *SortFlow) Start() {
+	s.Phase = SortFlowChooseMode
+}
+
+func (s *SortFlow) Update(msg tea.KeyMsg) SortResult {
+	switch s.Phase {
+	case SortFlowChooseMode:
+		switch msg.String() {
+		case "d":
+			s.Mode = SortDefault
+			s.Asc = false
+			s.Phase = SortFlowIdle
+			return SortResultConfirm
+		case "e":
+			s.Mode = SortEPSS
+			s.Phase = SortFlowChooseDir
+		case "c":
+			s.Mode = SortCVSS
+			s.Phase = SortFlowChooseDir
+		case "t":
+			s.Mode = SortDate
+			s.Phase = SortFlowChooseDir
+		case "i":
+			s.Mode = SortCVEID
+			s.Phase = SortFlowChooseDir
+		case "esc":
+			s.Phase = SortFlowIdle
+			return SortResultCancel
+		}
+	case SortFlowChooseDir:
+		switch msg.String() {
+		case "a":
+			s.Asc = true
+			s.Phase = SortFlowIdle
+			return SortResultConfirm
+		case "d":
+			s.Asc = false
+			s.Phase = SortFlowIdle
+			return SortResultConfirm
+		case "esc":
+			s.Phase = SortFlowIdle
+			return SortResultCancel
+		}
+	}
+	return SortResultNone
+}
+
+func (s SortFlow) View(width int) string {
+	var content string
+	switch s.Phase {
+	case SortFlowChooseMode:
+		content = FooterKeyStyle.Render("sort") + FooterDescStyle.Render(": ") +
+			FooterKeyStyle.Render("d") + FooterDescStyle.Render(": default") + "   " +
+			FooterKeyStyle.Render("e") + FooterDescStyle.Render(": EPSS") + "   " +
+			FooterKeyStyle.Render("c") + FooterDescStyle.Render(": CVSS") + "   " +
+			FooterKeyStyle.Render("t") + FooterDescStyle.Render(": date") + "   " +
+			FooterKeyStyle.Render("i") + FooterDescStyle.Render(": CVE ID") + "   " +
+			FooterKeyStyle.Render("esc") + FooterDescStyle.Render(": cancel")
+	case SortFlowChooseDir:
+		content = FooterKeyStyle.Render(sortModeNames[s.Mode]) + FooterDescStyle.Render(": ") +
+			FooterKeyStyle.Render("a") + FooterDescStyle.Render(": ascending") + "   " +
+			FooterKeyStyle.Render("d") + FooterDescStyle.Render(": descending") + "   " +
+			FooterKeyStyle.Render("esc") + FooterDescStyle.Render(": cancel")
+	}
+	return lipgloss.NewStyle().
+		Foreground(ColorDim).
+		Width(width).
+		Padding(0, 1).
+		Render(content)
+}
+
 // BestCVSS returns the highest-fidelity CVSS score, or -1 if none.
 func BestCVSS(c api.CVE) float64 {
 	if c.CVSSv3 != nil {

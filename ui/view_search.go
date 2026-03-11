@@ -72,10 +72,7 @@ type SearchModel struct {
 	page        int
 	fetchParams api.SearchCVEsParams
 
-	// Sort menu overlay
-	sortMenuOpen   bool
-	sortMenuCursor int
-	sortMenuAsc    bool // preview direction while navigating
+	SortFlow SortFlow
 
 	// Inline filter
 	filterInput  textinput.Model
@@ -168,58 +165,6 @@ func (m *SearchModel) applyFilters() {
 
 	m.cursor = 0
 	m.page = 0
-}
-
-func (m SearchModel) renderSortMenu() string {
-	var b strings.Builder
-
-	b.WriteString(LabelStyle.Render("  Sort By"))
-	b.WriteString("  " + DimStyle.Render("↑↓: select  ←→: direction  enter: apply  esc: cancel"))
-	b.WriteString("\n")
-	b.WriteString(DimStyle.Render("  " + strings.Repeat("─", 30)))
-	b.WriteString("\n")
-
-	for i, name := range sortModeNames {
-		selected := i == m.sortMenuCursor
-		active := SortMode(i) == m.sortMode
-
-		// Prefix
-		if selected {
-			b.WriteString(SelectedItemStyle.Render("  ▸ " + name))
-		} else {
-			b.WriteString(ListItemStyle.Render("    " + name))
-		}
-
-		// Direction options (not shown for default)
-		if i > 0 && selected {
-			descLabel := "↓ high–low"
-			ascLabel := "↑ low–high"
-			if SortMode(i) == SortDate || SortMode(i) == SortCVEID {
-				descLabel = "↓ newest"
-				ascLabel = "↑ oldest"
-			}
-			if m.sortMenuAsc {
-				b.WriteString("  " + DimStyle.Render(descLabel) + "  " + FooterKeyStyle.Render(ascLabel))
-			} else {
-				b.WriteString("  " + FooterKeyStyle.Render(descLabel) + "  " + DimStyle.Render(ascLabel))
-			}
-		}
-
-		// Active indicator
-		if active {
-			if i == 0 {
-				b.WriteString(DimStyle.Render("  (active)"))
-			} else if m.sortAsc {
-				b.WriteString(DimStyle.Render("  (active ↑)"))
-			} else {
-				b.WriteString(DimStyle.Render("  (active ↓)"))
-			}
-		}
-
-		b.WriteString("\n")
-	}
-
-	return b.String()
 }
 
 const searchPageSize = 50
@@ -322,31 +267,12 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Sort menu keys
-		if m.sortMenuOpen {
-			switch msg.String() {
-			case "esc", "e":
-				m.sortMenuOpen = false
-			case "up", "k":
-				if m.sortMenuCursor > 0 {
-					m.sortMenuCursor--
-					m.sortMenuAsc = false
-				}
-			case "down", "j":
-				if m.sortMenuCursor < len(sortModeNames)-1 {
-					m.sortMenuCursor++
-					m.sortMenuAsc = false
-				}
-			case "left", "h":
-				m.sortMenuAsc = false
-			case "right", "l":
-				if m.sortMenuCursor > 0 { // no asc/desc for default
-					m.sortMenuAsc = true
-				}
-			case "enter":
-				m.sortMode = SortMode(m.sortMenuCursor)
-				m.sortAsc = m.sortMenuAsc
-				m.sortMenuOpen = false
+		// Sort flow keys
+		if m.SortFlow.Active() {
+			result := m.SortFlow.Update(msg)
+			if result == SortResultConfirm {
+				m.sortMode = m.SortFlow.Mode
+				m.sortAsc = m.SortFlow.Asc
 				m.applyFilters()
 			}
 			return m, nil
@@ -436,9 +362,7 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 			}
 		case "e":
 			if !m.inputFocus && len(m.allResults) > 0 {
-				m.sortMenuOpen = true
-				m.sortMenuCursor = int(m.sortMode)
-				m.sortMenuAsc = m.sortAsc
+				m.SortFlow.Start()
 			}
 		case "f":
 			if !m.inputFocus && len(m.allResults) > 0 {
@@ -587,12 +511,6 @@ func (m SearchModel) View() string {
 		b.WriteString("  " + RenderStatus(m.status))
 	}
 	b.WriteString("\n\n")
-
-	// Sort menu overlay
-	if m.sortMenuOpen {
-		b.WriteString(m.renderSortMenu())
-		return b.String()
-	}
 
 	// Detail view
 	if m.detail != nil {

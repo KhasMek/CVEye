@@ -95,20 +95,17 @@ func (m rootModel) View() string {
 
 	header := ui.RenderHeader(m.activeView, resultCount, m.width)
 
-	var sf *ui.SaveFlow
-	switch m.activeView {
-	case ui.ViewCVE:
-		sf = &m.cveModel.SaveFlow
-	case ui.ViewSearch:
-		sf = &m.searchModel.SaveFlow
-	case ui.ViewCPE:
-		sf = &m.cpeModel.SaveFlow
-	}
-
 	var footer string
-	if sf.Active() {
-		footer = sf.View(m.width)
-	} else {
+	switch {
+	case m.searchModel.SortFlow.Active():
+		footer = m.searchModel.SortFlow.View(m.width)
+	case m.cveModel.SaveFlow.Active():
+		footer = m.cveModel.SaveFlow.View(m.width)
+	case m.searchModel.SaveFlow.Active():
+		footer = m.searchModel.SaveFlow.View(m.width)
+	case m.cpeModel.SaveFlow.Active():
+		footer = m.cpeModel.SaveFlow.View(m.width)
+	default:
 		footer = ui.RenderFooter(m.activeView, m.searchModel.InDetail(), m.width)
 	}
 
