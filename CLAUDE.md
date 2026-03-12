@@ -35,7 +35,7 @@ GET /cves
 | `start_date` | string | — | Format: `YYYY-MM-DDTHH:MM:SS` |
 | `end_date` | string | — | Format: `YYYY-MM-DDTHH:MM:SS` |
 
-- Returns: `CVEs` or `CVEsTotal`
+- Returns: `CVEs`
 
 #### 3. CPE Search
 ```
@@ -48,7 +48,7 @@ GET /cpes
 | `skip` | int | 0 | Pagination offset |
 | `limit` | int | 1000 | Max results |
 
-- Returns: `CPEs` or `CPEsTotal`
+- Returns: `CPEs`
 
 ---
 
@@ -102,8 +102,8 @@ cveye/
 │   └── models.go         # All response structs
 ├── ui/
 │   ├── styles.go         # All Lipgloss style definitions and color palette
-│   ├── common.go         # Shared components: header, footer, spinner, error box, save helpers
-│   ├── view_cve.go       # CVE Lookup view model + rendering
+│   ├── common.go         # Shared components, footer flows (SaveFlow, SortFlow, CopyFlow), clipboard
+│   ├── view_cve.go       # CVE Lookup view model + rendering + shared CVE detail renderer
 │   ├── view_search.go    # Product Search view model + rendering
 │   └── view_cpe.go       # CPE Browser view model + rendering
 ├── .github/
@@ -119,6 +119,7 @@ cveye/
 - `ui/` package imports `api/` for types, never does HTTP directly
 - `main.go` wires together the root model, parses CLI args, and handles oneshot JSON mode
 - No global state — everything flows through Bubbletea model structs
+- Shared message types (`CopiedMsg`, `CopyFailedMsg`) are handled in the root model to avoid duplication across views
 
 ---
 
@@ -145,7 +146,42 @@ func fetchCVECmd(id string) tea.Cmd {
 - API error responses are parsed for `detail` field — supports both string (404) and validation error array (422)
 - Both Product Search and CPE Browser fetch all results upfront using iterative single-page commands (live progress), then paginate locally. Product Search pages at 50; CPE Browser at 100.
 - Product Search maintains `allResults` (raw API data) and `filtered` (after KEV filter + text filter + sort). `applyFilters()` rebuilds `filtered` locally — no re-fetch needed for sort/filter changes.
-- Sort menu overlay intercepts all keys when open; supports 5 sort modes (default, EPSS, CVSS, date, CVE ID) with ascending/descending toggle.
+- CPE Browser uses the same `allResults`/`filtered` pattern with inline text filtering.
+- Empty API responses (e.g. skip exceeds results) return empty body — handled via `io.ReadAll` + `len(body) == 0` check before JSON unmarshaling.
+
+---
+
+## Footer Flow Pattern
+
+Interactive submenus (sort, save, copy) follow a shared "footer flow" pattern inspired by vim's command bar:
+
+1. A hotkey opens the flow — the footer is replaced with context-specific options
+2. The user presses a key to select — the flow may advance to a second phase or complete
+3. `esc` cancels at any phase and restores the normal footer
+4. Only one flow can be active at a time; the root model's `View()` checks the active view's flows
+
+### SaveFlow (`s` key)
+- **Phase 1** (only when filter is active): choose `a` (all results) or `f` (filtered results)
+- **Phase 2**: editable filename input (pre-filled with default), confirm with `enter`
+- Both filenames are passed to `StartChoosing()` so the choosing→naming transition happens internally
+- Views without filters skip directly to Phase 2 via `StartNaming()`
+
+### SortFlow (`e` key, Product Search only)
+- **Phase 1**: choose sort mode — `d` (default), `e` (EPSS), `c` (CVSS), `t` (date), `i` (CVE ID)
+- **Phase 2** (skipped for default): choose direction — `a` (ascending), `d` (descending)
+- On confirm, the view's `sortMode`/`sortAsc` are updated and `applyFilters()` is called
+
+### CopyFlow (`c` key)
+- Single phase: shows context-appropriate options (varies by view/state)
+- Each model provides a `[]CopyOption{Key, Label, Value}` list when starting the flow
+- CVE detail views use shared `cveCopyOptions()` helper: `i` (CVE ID), `s` (summary), `v` (CVSS), `e` (EPSS), `r` (references), `p` (CPEs)
+- Product Search list: `i` (CVE ID), `v` (CVSS), `e` (EPSS) for selected row
+- CPE Browser: copies selected CPE string directly (no submenu)
+- Clipboard via `os/exec`: `pbcopy` (macOS), `xclip`/`xsel`/`wl-copy` (Linux), `clip` (Windows)
+- `CopiedMsg`/`CopyFailedMsg` handled in root model, sets status on active view via `setActiveStatus()`
+
+### Exported Fields
+- `SaveFlow`, `SortFlow`, `CopyFlow`, and `Status` are exported on view models so the root model can access them directly for footer rendering and status updates, avoiding wrapper methods.
 
 ---
 
@@ -217,16 +253,19 @@ cveye [command] [query] [flags]
 | `tab` / `shift+tab` | Cycle between views |
 | `ctrl+c` / `q` | Quit |
 | `enter` | Submit search / select row |
-| `↑` / `↓` | Navigate table or list |
+| `↑` / `↓` / `j` / `k` | Navigate table or list |
 | `scroll wheel` | Scroll lists and detail panels (mouse/trackpad) |
-| `/` | Filter results by keyword (Product Search) |
-| `e` | Open sort menu (Product Search) |
+| `/` | Filter results by keyword (Product Search, CPE Browser) |
+| `e` | Open sort flow (Product Search) |
 | `f` | Toggle KEV-only filter (Product Search) |
-| `s` | Save current results as JSON to working directory |
+| `c` | Copy to clipboard (opens field selection menu) |
+| `s` | Save as JSON (opens save flow with optional all/filtered choice + filename) |
 | `n` / `p` | Next / previous page (Product Search, CPE Browser) |
-| `esc` | Toggle search input focus / clear filter / close detail panel |
+| `esc` | Cancel active flow / toggle search input focus / clear filter / close detail panel |
 
-**Note:** `e`, `f`, `s`, and `q` only activate when the text input is not focused. Press `esc` to blur the input first.
+**Note:** `e`, `f`, `s`, `c`, and `q` only activate when the text input is not focused. Press `esc` to blur the input first.
+
+**Context-aware footer:** The footer bar shows only the hotkeys applicable to the current view and state. When a flow (sort, save, copy) is active, it replaces the footer entirely until completed or cancelled with `esc`.
 
 ---
 
@@ -240,11 +279,13 @@ cveye [command] [query] [flags]
 - Active view name highlighted, inactive views dimmed
 - Result count shown when results are loaded
 
-**Footer** (always visible):
+**Footer** (context-aware):
 ```
-  tab: switch view   esc: toggle focus   /: filter   e: sort   f: kev filter   s: save json   n/p: next/prev page   ctrl+c: quit
+  tab: switch view   esc: toggle focus   /: filter   e: sort   f: kev filter   c: copy   s: save json   n/p: next/prev page   ctrl+c: quit
 ```
 - All keys in `ColorAccent`, descriptions in `ColorDim`
+- Footer content varies by view (CVE Lookup, Product Search list/detail, CPE Browser)
+- Replaced by flow-specific prompts when SaveFlow, SortFlow, or CopyFlow is active
 
 ---
 
