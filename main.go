@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"cveye/api"
 	"cveye/ui"
@@ -19,6 +20,18 @@ type rootModel struct {
 	cpeModel    ui.CPEModel
 	width       int
 	height      int
+}
+
+func (m *rootModel) setActiveStatus(msg string) tea.Cmd {
+	switch m.activeView {
+	case ui.ViewCVE:
+		m.cveModel.Status = msg
+	case ui.ViewSearch:
+		m.searchModel.Status = msg
+	case ui.ViewCPE:
+		m.cpeModel.Status = msg
+	}
+	return ui.ClearStatusAfter(3 * time.Second)
 }
 
 func newRootModel(view ui.ViewID) rootModel {
@@ -65,6 +78,12 @@ func (m rootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeView = ui.ViewSearch
 		cmd := m.searchModel.SetCPE23(msg.CPE23)
 		return m, cmd
+
+	case ui.CopiedMsg:
+		return m, m.setActiveStatus(msg.Label)
+
+	case ui.CopyFailedMsg:
+		return m, m.setActiveStatus("Copy failed: " + msg.Err.Error())
 	}
 
 	// Delegate to active view
@@ -97,6 +116,10 @@ func (m rootModel) View() string {
 
 	var footer string
 	switch {
+	case m.cveModel.CopyFlow.Active:
+		footer = m.cveModel.CopyFlow.View(m.width)
+	case m.searchModel.CopyFlow.Active:
+		footer = m.searchModel.CopyFlow.View(m.width)
 	case m.searchModel.SortFlow.Active():
 		footer = m.searchModel.SortFlow.View(m.width)
 	case m.cveModel.SaveFlow.Active():

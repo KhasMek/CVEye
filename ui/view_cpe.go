@@ -47,7 +47,7 @@ type CPEModel struct {
 	height     int
 	cursor     int
 	inputFocus bool
-	status     string
+	Status     string
 	page       int
 	fetchQuery string
 
@@ -219,6 +219,11 @@ func (m CPEModel) Update(msg tea.Msg) (CPEModel, tea.Cmd) {
 				m.SaveFlow.SaveAll = true
 				return m, m.SaveFlow.StartNaming(name + "-cpes.json")
 			}
+		case "c":
+			if !m.inputFocus && len(m.filtered) > 0 {
+				idx := m.page*cpePageSize + m.cursor
+				return m, CopyToClipboardCmd(m.filtered[idx], "Copied CPE")
+			}
 		case "q":
 			if !m.inputFocus {
 				return m, tea.Quit
@@ -226,15 +231,15 @@ func (m CPEModel) Update(msg tea.Msg) (CPEModel, tea.Cmd) {
 		}
 
 	case SavedMsg:
-		m.status = "Saved to " + msg.Path
+		m.Status = "Saved to " + msg.Path
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case SaveFailedMsg:
-		m.status = "Save failed: " + msg.Err.Error()
+		m.Status = "Save failed: " + msg.Err.Error()
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case ClearStatusMsg:
-		m.status = ""
+		m.Status = ""
 		return m, nil
 
 	case cpeFetchedMsg:
@@ -292,8 +297,8 @@ func (m CPEModel) View() string {
 	var b strings.Builder
 
 	b.WriteString(InputStyle.Render(m.input.View()))
-	if m.status != "" {
-		b.WriteString("  " + RenderStatus(m.status))
+	if m.Status != "" {
+		b.WriteString("  " + RenderStatus(m.Status))
 	}
 	b.WriteString("\n\n")
 

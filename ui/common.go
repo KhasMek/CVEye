@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"time"
 
 	"cveye/api"
@@ -58,6 +61,7 @@ func RenderFooter(view ViewID, searchDetail bool, width int) string {
 	case view == ViewSearch && searchDetail:
 		keys = []hint{
 			{"esc", "back"},
+			{"c", "copy"},
 			{"s", "save json"},
 			{"ctrl+c", "quit"},
 		}
@@ -68,6 +72,7 @@ func RenderFooter(view ViewID, searchDetail bool, width int) string {
 			{"/", "filter"},
 			{"e", "sort"},
 			{"f", "kev filter"},
+			{"c", "copy"},
 			{"s", "save json"},
 			{"n/p", "next/prev page"},
 			{"ctrl+c", "quit"},
@@ -77,6 +82,7 @@ func RenderFooter(view ViewID, searchDetail bool, width int) string {
 			{"tab", "switch view"},
 			{"esc", "toggle focus"},
 			{"/", "filter"},
+			{"c", "copy CPE"},
 			{"s", "save json"},
 			{"n/p", "next/prev page"},
 			{"ctrl+c", "quit"},
@@ -85,6 +91,7 @@ func RenderFooter(view ViewID, searchDetail bool, width int) string {
 		keys = []hint{
 			{"tab", "switch view"},
 			{"esc", "toggle focus"},
+			{"c", "copy"},
 			{"s", "save json"},
 			{"ctrl+c", "quit"},
 		}
@@ -377,6 +384,96 @@ func (s SortFlow) View(width int) string {
 		Width(width).
 		Padding(0, 1).
 		Render(content)
+}
+
+// CopyOption represents a single item that can be copied to clipboard.
+type CopyOption struct {
+	Key   string // key to press
+	Label string // display label
+	Value string // text to copy
+}
+
+// CopyFlow manages the copy-to-clipboard footer menu.
+type CopyFlow struct {
+	Active  bool
+	Options []CopyOption
+}
+
+func (c *CopyFlow) Start(options []CopyOption) {
+	c.Active = true
+	c.Options = options
+}
+
+func (c *CopyFlow) Cancel() {
+	c.Active = false
+	c.Options = nil
+}
+
+// Update handles a key press. Returns the copied text, or empty string if no match.
+func (c *CopyFlow) Update(msg tea.KeyMsg) string {
+	if msg.String() == "esc" {
+		c.Cancel()
+		return ""
+	}
+	for _, opt := range c.Options {
+		if msg.String() == opt.Key {
+			c.Cancel()
+			return opt.Value
+		}
+	}
+	return ""
+}
+
+func (c CopyFlow) View(width int) string {
+	content := FooterKeyStyle.Render("copy") + FooterDescStyle.Render(": ")
+	for i, opt := range c.Options {
+		if i > 0 {
+			content += "   "
+		}
+		content += FooterKeyStyle.Render(opt.Key) + FooterDescStyle.Render(": "+opt.Label)
+	}
+	content += "   " + FooterKeyStyle.Render("esc") + FooterDescStyle.Render(": cancel")
+	return lipgloss.NewStyle().
+		Foreground(ColorDim).
+		Width(width).
+		Padding(0, 1).
+		Render(content)
+}
+
+// CopiedMsg is sent after a successful clipboard copy.
+type CopiedMsg struct{ Label string }
+
+// CopyFailedMsg is sent when clipboard copy fails.
+type CopyFailedMsg struct{ Err error }
+
+// CopyToClipboardCmd copies text to the system clipboard.
+func CopyToClipboardCmd(text, label string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "darwin":
+			cmd = exec.Command("pbcopy")
+		case "linux":
+			if _, err := exec.LookPath("xclip"); err == nil {
+				cmd = exec.Command("xclip", "-selection", "clipboard")
+			} else if _, err := exec.LookPath("xsel"); err == nil {
+				cmd = exec.Command("xsel", "--clipboard", "--input")
+			} else if _, err := exec.LookPath("wl-copy"); err == nil {
+				cmd = exec.Command("wl-copy")
+			} else {
+				return CopyFailedMsg{fmt.Errorf("no clipboard tool found (install xclip, xsel, or wl-copy)")}
+			}
+		case "windows":
+			cmd = exec.Command("clip")
+		default:
+			return CopyFailedMsg{fmt.Errorf("clipboard not supported on %s", runtime.GOOS)}
+		}
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err != nil {
+			return CopyFailedMsg{err}
+		}
+		return CopiedMsg{label}
+	}
 }
 
 // BestCVSS returns the highest-fidelity CVSS score, or -1 if none.

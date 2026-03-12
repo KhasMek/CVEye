@@ -26,6 +26,30 @@ func fetchCVECmd(id string) tea.Cmd {
 	}
 }
 
+// cveCopyOptions builds the copy menu options for a CVE detail.
+func cveCopyOptions(r *api.CVEWithCPEs) []CopyOption {
+	opts := []CopyOption{
+		{"i", "CVE ID", r.CVEID},
+	}
+	if r.Summary != nil {
+		opts = append(opts, CopyOption{"s", "summary", *r.Summary})
+	}
+	cvss := BestCVSS(r.CVE)
+	if cvss >= 0 {
+		opts = append(opts, CopyOption{"v", "CVSS", fmt.Sprintf("%.1f", cvss)})
+	}
+	if r.EPSS != nil {
+		opts = append(opts, CopyOption{"e", "EPSS", fmt.Sprintf("%.2f%%", *r.EPSS*100)})
+	}
+	if len(r.References) > 0 {
+		opts = append(opts, CopyOption{"r", "references", strings.Join(r.References, "\n")})
+	}
+	if len(r.CPEs) > 0 {
+		opts = append(opts, CopyOption{"p", "CPEs", strings.Join(r.CPEs, "\n")})
+	}
+	return opts
+}
+
 // CVEModel is the model for the CVE Lookup view.
 type CVEModel struct {
 	input      textinput.Model
@@ -37,8 +61,9 @@ type CVEModel struct {
 	height     int
 	scrollY    int
 	inputFocus bool
-	status     string
+	Status     string
 	SaveFlow SaveFlow
+	CopyFlow CopyFlow
 }
 
 func NewCVEModel() CVEModel {
@@ -68,6 +93,14 @@ func (m CVEModel) Update(msg tea.Msg) (CVEModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Copy flow keys
+		if m.CopyFlow.Active {
+			if val := m.CopyFlow.Update(msg); val != "" {
+				return m, CopyToClipboardCmd(val, "Copied")
+			}
+			return m, nil
+		}
+
 		// Save flow keys
 		if m.SaveFlow.Active() {
 			cmd, result := m.SaveFlow.Update(msg)
@@ -108,6 +141,11 @@ func (m CVEModel) Update(msg tea.Msg) (CVEModel, tea.Cmd) {
 			if !m.inputFocus && m.result != nil {
 				return m, m.SaveFlow.StartNaming(m.result.CVEID + ".json")
 			}
+		case "c":
+			if !m.inputFocus && m.result != nil {
+				m.CopyFlow.Start(cveCopyOptions(m.result))
+				return m, nil
+			}
 		case "q":
 			if !m.inputFocus {
 				return m, tea.Quit
@@ -115,15 +153,15 @@ func (m CVEModel) Update(msg tea.Msg) (CVEModel, tea.Cmd) {
 		}
 
 	case SavedMsg:
-		m.status = "Saved to " + msg.Path
+		m.Status = "Saved to " + msg.Path
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case SaveFailedMsg:
-		m.status = "Save failed: " + msg.Err.Error()
+		m.Status = "Save failed: " + msg.Err.Error()
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case ClearStatusMsg:
-		m.status = ""
+		m.Status = ""
 		return m, nil
 
 	case cveFetchedMsg:
@@ -172,8 +210,8 @@ func (m CVEModel) View() string {
 
 	// Input
 	b.WriteString(InputStyle.Render(m.input.View()))
-	if m.status != "" {
-		b.WriteString("  " + RenderStatus(m.status))
+	if m.Status != "" {
+		b.WriteString("  " + RenderStatus(m.Status))
 	}
 	b.WriteString("\n\n")
 

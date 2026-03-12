@@ -55,7 +55,7 @@ type SearchModel struct {
 	detailErr  error
 	detailLoad bool
 	scrollY    int
-	status      string
+	Status      string
 	page        int
 	fetchParams api.SearchCVEsParams
 
@@ -67,6 +67,7 @@ type SearchModel struct {
 	filterText   string
 
 	SaveFlow SaveFlow
+	CopyFlow CopyFlow
 }
 
 // applyFilters rebuilds m.filtered from m.allResults based on current filter/sort state.
@@ -237,6 +238,14 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Copy flow keys
+		if m.CopyFlow.Active {
+			if val := m.CopyFlow.Update(msg); val != "" {
+				return m, CopyToClipboardCmd(val, "Copied")
+			}
+			return m, nil
+		}
+
 		// Save flow keys
 		if m.SaveFlow.Active() {
 			cmd, result := m.SaveFlow.Update(msg)
@@ -299,6 +308,9 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 				return m, nil
 			case "s":
 				return m, m.SaveFlow.StartNaming(m.detail.CVEID + ".json")
+			case "c":
+				m.CopyFlow.Start(cveCopyOptions(m.detail))
+				return m, nil
 			case "q":
 				return m, tea.Quit
 			}
@@ -385,6 +397,20 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 				m.SaveFlow.SaveAll = true
 				return m, m.SaveFlow.StartNaming(name + "-cves.json")
 			}
+		case "c":
+			if !m.inputFocus && len(m.filtered) > 0 {
+				cve := m.filtered[m.page*searchPageSize+m.cursor]
+				opts := []CopyOption{{"i", "CVE ID", cve.CVEID}}
+				cvss := BestCVSS(cve)
+				if cvss >= 0 {
+					opts = append(opts, CopyOption{"v", "CVSS", fmt.Sprintf("%.1f", cvss)})
+				}
+				if cve.EPSS != nil {
+					opts = append(opts, CopyOption{"e", "EPSS", fmt.Sprintf("%.2f%%", *cve.EPSS*100)})
+				}
+				m.CopyFlow.Start(opts)
+				return m, nil
+			}
 		case "q":
 			if !m.inputFocus {
 				return m, tea.Quit
@@ -392,15 +418,15 @@ func (m SearchModel) Update(msg tea.Msg) (SearchModel, tea.Cmd) {
 		}
 
 	case SavedMsg:
-		m.status = "Saved to " + msg.Path
+		m.Status = "Saved to " + msg.Path
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case SaveFailedMsg:
-		m.status = "Save failed: " + msg.Err.Error()
+		m.Status = "Save failed: " + msg.Err.Error()
 		return m, ClearStatusAfter(3 * time.Second)
 
 	case ClearStatusMsg:
-		m.status = ""
+		m.Status = ""
 		return m, nil
 
 	case searchFetchedMsg:
@@ -494,8 +520,8 @@ func (m SearchModel) View() string {
 	if len(filters) > 0 {
 		b.WriteString("  " + strings.Join(filters, " "))
 	}
-	if m.status != "" {
-		b.WriteString("  " + RenderStatus(m.status))
+	if m.Status != "" {
+		b.WriteString("  " + RenderStatus(m.Status))
 	}
 	b.WriteString("\n\n")
 
