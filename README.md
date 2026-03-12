@@ -79,7 +79,7 @@ All results are fetched upfront so sorting and filtering are instant:
 
 ### CPE Browser
 
-Search for CPE 2.3 strings by product name. Select a CPE and press `Enter` to pivot to Product Search filtered by that CPE. Use `n`/`p` to page through results.
+Search for CPE 2.3 strings by product name. Select a CPE and press `Enter` to pivot to Product Search filtered by that CPE.
 
 ```
 # Type a product name in the CPE Browser tab
@@ -88,6 +88,8 @@ Search for CPE 2.3 strings by product name. Select a CPE and press `Enter` to pi
 # Or directly from the command line
 cveye cpe apache
 ```
+
+All results are fetched upfront. Use `/` to filter CPEs by keyword (useful for narrowing by version), and `n`/`p` to page through results.
 
 ### JSON Mode (`--json`)
 
@@ -109,14 +111,21 @@ cveye cve CVE-2021-44228 --json | jq '.cve_id'
 
 ### Saving Results in the TUI
 
-Press `s` in any view to save the current results as JSON to the working directory:
+Press `s` to save results as JSON. A prompt appears in the footer where you can edit the filename before confirming with `enter`.
 
-- **CVE Lookup** — saves the full CVE detail to `CVE-2021-44228.json`
-- **Product Search (list)** — saves all results to `apache-cves.json`
-- **Product Search (detail)** — saves the selected CVE to `CVE-2021-44228.json`
-- **CPE Browser** — saves all CPE strings to `apache-cpes.json`
+When a filter is active (Product Search or CPE Browser), you'll first be asked whether to save **all** results or only the **filtered** results.
 
-A confirmation message appears briefly after saving.
+Default filenames:
+- **CVE Lookup** — `CVE-2021-44228.json`
+- **Product Search (list)** — `apache-cves.json` (or `apache-cves-filtered.json`)
+- **Product Search (detail)** — `CVE-2021-44228.json`
+- **CPE Browser** — `apache-cpes.json` (or `apache-cpes-filtered.json`)
+
+### Copy to Clipboard
+
+Press `c` to copy data from the current view. In detail views (CVE Lookup, Product Search detail), a menu lets you choose which field to copy (CVE ID, summary, CVSS, EPSS, references, CPEs). In the Product Search list, you can copy the selected row's CVE ID, CVSS, or EPSS. In the CPE Browser, `c` copies the selected CPE string directly.
+
+Clipboard support: `pbcopy` (macOS), `xclip`/`xsel`/`wl-copy` (Linux), `clip` (Windows).
 
 ## Hotkeys
 
@@ -124,11 +133,14 @@ A confirmation message appears briefly after saving.
 |---|---|
 | `tab` / `shift+tab` | Switch between views |
 | `enter` | Submit search / select row |
-| `up` / `down` | Navigate list |
-| `/` | Filter results by keyword (Product Search) |
+| `up` / `down` / `j` / `k` | Navigate list |
+| `/` | Filter results by keyword (Product Search, CPE Browser) |
 | `e` | Open sort menu (Product Search) |
-| `f` | Toggle KEV filter (Product Search) |
-| `s` | Save current results as JSON |
+| `f` | Toggle KEV-only filter (Product Search) |
+| `c` | Copy to clipboard |
+| `s` | Save results as JSON |
 | `n` / `p` | Next / previous page (Product Search, CPE Browser) |
 | `esc` | Toggle search input focus / clear filter / close detail panel |
 | `ctrl+c` / `q` | Quit |
+
+The footer bar updates to show only the hotkeys available in the current view. Submenus (sort, save, copy) replace the footer temporarily — press `esc` to cancel.
