@@ -115,20 +115,27 @@ func (m rootModel) View() string {
 	header := ui.RenderHeader(m.activeView, resultCount, m.width)
 
 	var footer string
-	switch {
-	case m.cveModel.CopyFlow.Active:
-		footer = m.cveModel.CopyFlow.View(m.width)
-	case m.searchModel.CopyFlow.Active:
-		footer = m.searchModel.CopyFlow.View(m.width)
-	case m.searchModel.SortFlow.Active():
-		footer = m.searchModel.SortFlow.View(m.width)
-	case m.cveModel.SaveFlow.Active():
-		footer = m.cveModel.SaveFlow.View(m.width)
-	case m.searchModel.SaveFlow.Active():
-		footer = m.searchModel.SaveFlow.View(m.width)
-	case m.cpeModel.SaveFlow.Active():
-		footer = m.cpeModel.SaveFlow.View(m.width)
-	default:
+	switch m.activeView {
+	case ui.ViewCVE:
+		if m.cveModel.CopyFlow.Active {
+			footer = m.cveModel.CopyFlow.View(m.width)
+		} else if m.cveModel.SaveFlow.Active() {
+			footer = m.cveModel.SaveFlow.View(m.width)
+		}
+	case ui.ViewSearch:
+		if m.searchModel.CopyFlow.Active {
+			footer = m.searchModel.CopyFlow.View(m.width)
+		} else if m.searchModel.SortFlow.Active() {
+			footer = m.searchModel.SortFlow.View(m.width)
+		} else if m.searchModel.SaveFlow.Active() {
+			footer = m.searchModel.SaveFlow.View(m.width)
+		}
+	case ui.ViewCPE:
+		if m.cpeModel.SaveFlow.Active() {
+			footer = m.cpeModel.SaveFlow.View(m.width)
+		}
+	}
+	if footer == "" {
 		footer = ui.RenderFooter(m.activeView, m.searchModel.InDetail(), m.width)
 	}
 
